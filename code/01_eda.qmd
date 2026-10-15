@@ -1,0 +1,11 @@
+---
+title: EDA
+author: Your name
+format: gfm
+---
+
+```{r}
+#| label: setup
+
+# 
+```

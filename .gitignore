@@ -1,0 +1,11 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+
+*.pdf
+Makefile
+*.css
+README.qmd
+dag.png
+.quarto
