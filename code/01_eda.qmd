@@ -16,6 +16,43 @@ What I want to explore:
 
 ```{r}
 #| label: setup
+library(tidyverse)
 
-# 
+load("../data/HCMST 2017 to 2022 small public version 2.2.rdata")
+
+hcmst <- `HCMST small public version 2.2`
+
+core_variables <- c(
+  "caseid_new", # respondant identifier
+  "w1_partnership_status", # relationship status in wave 1
+  "w1_weight_combo", # analytic weight 
+  "w1_ppage", # age in years at wave 1
+  "w1_ppagecat", # 7 age category at wave 1
+  "w1_ppagect4", # 4 age category
+  "w1_q21a_year", # year respondant met partner
+  "w1_q21a_month", # month respondant met partner
+  "w1_year_fraction_met", # decimal year representation of meeting date
+  "w1_q21b_year", # year relationship began
+  "w1_q21b_month", # month relationship began
+  "w1_year_fraction_relstart", # decimal year representation of relationship start
+  "w1_time_from_met_to_rel" # met date to relationship start date in years
+)
+
+how_met_variables <- "w1_q24"
+
+cuffing_data <- hcmst |> 
+  select(any_of(core_variables),
+         contains(how_met_variables))
+```
+
+```{r}
+#| label: exploratory-charts
+
+ggplot(cuffing_data, aes(x = w1_q21b_month)) +
+  geom_bar()
+
+# what i want to do next is calculate the age at the start of the relationship for each of these
+# then i want to regroup them into categories (maybe using the same ones they use) but at the time
+# of the relationship start
+# THEN i want to plot the month counts by age group
 ```
