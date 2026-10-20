@@ -4,6 +4,16 @@ author: Your name
 format: gfm
 ---
 
+Dataset I'm interested in exploring:
+
+-   [How Couples Meet and Stay Together 2017 (HCMST 2017)](https://data.stanford.edu/hcmst2017)
+
+-   [User Guide](https://stacks.stanford.edu/file/druid:tq903pj6286/HCMST%202017-%202022%20user%27s%20guide%20v2.3.pdf)
+
+What I want to explore:
+
+-   How real is "Cuffing Season," how does it differ across age groups?
+
 ```{r}
 #| label: setup
 
