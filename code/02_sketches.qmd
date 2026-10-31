@@ -7,5 +7,25 @@ format: gfm
 ```{r}
 #| label: setup
 
-# 
+library(ggridges)
+library(ggdist)
+library(ggmosaic)
+
+ggplot(cuffing_data, aes(x = w1_q21b_month, y = w1_age_at_relstart_cat)) + 
+  geom_density_ridges()
+ggplot(cuffing_data, aes(x = w1_q21b_month, y = w1_age_at_relstart_cat)) + 
+  geom_dots()
+ggplot(cuffing_data, aes(x = w1_q21b_month, y = w1_age_at_relstart_cat)) + 
+  geom_dots()
+p1 <- ggplot(cuffing_data) +
+  geom_mosaic(aes(x = w1_age_at_relstart_cat, fill = relstart_season)) +
+  theme_mosaic()
+
+p2 <- ggplot(cuffing_data) +
+  geom_mosaic(aes(weight = w1_weight_combo, x = w1_age_at_relstart_cat, fill = relstart_season)) +
+  theme_mosaic()
+
+library(patchwork)
+
+p1/p2
 ```

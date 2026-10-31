@@ -14,6 +14,18 @@ What I want to explore:
 
 -   How real is "Cuffing Season," how does it differ across age groups?
 
+Plots I want to make:
+- STRONG OPTION NOW: Use ggmosaic!!!!!
+- Maybe use ggalluvial to map relationship met, to start, to breakup month?
+- Use ggridges to plot month of relstart by age group???
+
+Revised goal:
+- The final 2 charts in the crossword article looked at very specific words to explore who was mentioned in clues to get those words
+- I would like to do something similar where I hone in on part of the data and visualize an aspect of it that reinforces the story
+- As my focus graph I can explore what the two bumps are in the 65+ range
+
+I'm not sure where to put this note yet but I think it'll be interesting to include somewhere: When I initially classed each row into an age category based on the relationship start date I didn't make an under 18 category because none of the respondants were under 18, but I didn't even think about the fact that a huge amount of respondants may have been 18 when filling out the survey but under 18 when their relationship began. I added that in and all the NAs disappeared.
+
 ```{r}
 #| label: setup
 library(tidyverse)
@@ -21,6 +33,7 @@ library(tidyverse)
 load("../data/HCMST 2017 to 2022 small public version 2.2.rdata")
 
 hcmst <- `HCMST small public version 2.2`
+?labelled::to_labelled
 
 core_variables <- c(
   "caseid_new", # respondant identifier
@@ -29,6 +42,7 @@ core_variables <- c(
   "w1_ppage", # age in years at wave 1
   "w1_ppagecat", # 7 age category at wave 1
   "w1_ppagect4", # 4 age category
+  "w1_age_when_met", # calculated age when partners met
   "w1_q21a_year", # year respondant met partner
   "w1_q21a_month", # month respondant met partner
   "w1_year_fraction_met", # decimal year representation of meeting date
@@ -39,20 +53,224 @@ core_variables <- c(
 )
 
 how_met_variables <- "w1_q24"
+breakup_variables <- "w1_q21e"
 
 cuffing_data <- hcmst |> 
   select(any_of(core_variables),
-         contains(how_met_variables))
+         contains(how_met_variables),
+         contains(breakup_variables)) |> 
+  mutate(across(c("w1_partnership_status", "w1_ppagecat","w1_ppagect4"),haven::as_factor),
+         across(contains(how_met_variables),haven::as_factor)
+  ) |> 
+  mutate(w1_year_fraction_breakup = w1_q21e_year+((w1_q21e_month-0.5)/12)) |> # this creates a year fraction for breakup date using the same formula the survey uses for relstart date
+  mutate(relationship_length = w1_year_fraction_breakup - w1_year_fraction_relstart) |> # creates a relationship length variable
+  mutate(
+    w1_age_at_relstart = w1_ppage - (2017 - w1_q21b_year)) |> 
+  mutate(across(c(w1_ppage, w1_age_when_met, w1_age_at_relstart),
+      ~ cut(
+        .x,
+        breaks = c(-Inf, 18, 25, 35, 45, 65, Inf),
+        labels = c("< 18", "18-24", "25-34", "35-44", "45-64", "65+"),
+        right = FALSE
+      ),
+      .names = "{.col}_cat")) |> 
+  mutate(
+  relstart_season = case_when(
+    w1_q21b_month %in% c(12, 1, 2) ~ "Winter",
+    w1_q21b_month %in% c(3, 4, 5)  ~ "Spring",
+    w1_q21b_month %in% c(6, 7, 8)  ~ "Summer",
+    w1_q21b_month %in% c(9, 10, 11) ~ "Fall",
+    TRUE ~ NA_character_
+  ),
+  relstart_season = factor(
+    relstart_season,
+    levels = c("Winter", "Spring", "Summer", "Fall")
+  ),
+  met_season = case_when(
+    w1_q21a_month %in% c(12, 1, 2) ~ "Winter",
+    w1_q21a_month %in% c(3, 4, 5)  ~ "Spring",
+    w1_q21a_month %in% c(6, 7, 8)  ~ "Summer",
+    w1_q21a_month %in% c(9, 10, 11) ~ "Fall",
+    TRUE ~ NA_character_
+  ),
+  met_season = factor(
+    met_season,
+    levels = c("Winter", "Spring", "Summer", "Fall")
+  ),
+  breakup_season = case_when(
+    w1_q21e_month %in% c(12, 1, 2) ~ "Winter",
+    w1_q21e_month %in% c(3, 4, 5)  ~ "Spring",
+    w1_q21e_month %in% c(6, 7, 8)  ~ "Summer",
+    w1_q21e_month %in% c(9, 10, 11) ~ "Fall",
+    TRUE ~ NA_character_
+  ),
+  breakup_season = factor(
+    breakup_season,
+    levels = c("Winter", "Spring", "Summer", "Fall")
+  )
+)
+
+# in my EDA i was noticing that fall and winter seemed pretty low, which would disprove my hypothesis that was based on real research. I wondered if the sampling dates being in July-August would impact this becuase for 2017 we don't have any data after August. so I decided to filter out 2017 for now to see if that is the case.
+
+cuffing_data <- cuffing_data |>
+  filter(w1_q21b_year < 2017)
+
+summary(hcmst$w1_ppage)
+summary(hcmst$w1_year_fraction_relstart)
+summary(cuffing_data$w1_age_when_met)
+summary(cuffing_data$w1_age_at_relstart)
+summary(cuffing_data$w1_q21e_year)
+sum(!is.na(cuffing_data$w1_q21e_year))
+
+cuffing_design <- cuffing_data |>
+  srvyr::as_survey_design(
+    ids = 1,
+    weights = w1_weight_combo
+  )
 ```
 
 ```{r}
 #| label: exploratory-charts
 
-ggplot(cuffing_data, aes(x = w1_q21b_month)) +
+library(patchwork)
+
+# seeing counts by age group categories for relationship start age since I had been ignoring <18 before on accident
+ggplot(cuffing_data, aes(x = w1_age_at_relstart_cat)) +
   geom_bar()
 
-# what i want to do next is calculate the age at the start of the relationship for each of these
-# then i want to regroup them into categories (maybe using the same ones they use) but at the time
-# of the relationship start
-# THEN i want to plot the month counts by age group
+# this is what the histogram looks like before taking weights into account
+ggplot(cuffing_data, aes(x = w1_q21b_month, fill = w1_age_at_relstart_cat)) +
+  geom_bar()
+
+# this is what the seasonal chart looks like before taking weights into account
+ggplot(cuffing_data, aes(x = met_season, fill = w1_age_at_relstart_cat)) +
+         geom_bar()
+
+# only looking at the 18-24 category
+all_age_met <- ggplot(cuffing_data, aes(x = met_season)) +
+  geom_bar()  +
+  ggtitle("Meet Date by Season, All Ages")
+
+all_age_relstart <- ggplot(cuffing_data, aes(x = relstart_season)) +
+  geom_bar() +
+  ggtitle("Start Date by Season, All Ages")
+
+# only looking at the 18-24 category
+college_age_met <- ggplot(subset(cuffing_data, w1_age_at_relstart_cat == "< 18"), aes(x = met_season)) +
+  geom_bar()  +
+  ggtitle("Meet Date by Season, 18-24")
+
+college_age_relstart <- ggplot(subset(cuffing_data, w1_age_at_relstart_cat == "< 18"), aes(x = relstart_season)) +
+  geom_bar() +
+  ggtitle("Start Date by Season, 18-24")
+
+# plot these 4 to compare
+
+(all_age_met + college_age_met) / (all_age_relstart + college_age_relstart)
+
+ggplot(cuffing_data, aes(x = factor(w1_q21b_month), y = relationship_length)) +
+  geom_boxplot()
+
+# plotting relationship 
+
+
+# Use Waffle Package to make a seperate chart for each age group, and have the values be the seasons by counts
+# of times that couples began their relationship then.
+  # this would use the waffle plot + faceting
+```
+```{r}
+#| label: seasonal-patterns
+
+seasonal_data <- cuffing_data |>
+  select(
+    caseid_new,
+    ends_with("_season")
+  ) |>
+  pivot_longer(
+    cols = -caseid_new,
+    names_to = "event",
+    values_to = "season"
+  ) |>
+  mutate(
+    event = recode(
+      event,
+      w1_q21a_month_season = "Met partner",
+      w1_q21b_month_season = "Relationship began",
+      w1_q21e_month_season = "Relationship ended"
+    ),
+    season = factor(
+      season,
+      levels = c("Winter", "Spring", "Summer", "Fall")
+    )
+  )
+
+seasonal_summary <- seasonal_data |>
+  filter(!is.na(season)) |>
+  group_by(event, season) |>
+  summarise(
+    n = n(),
+    .groups = "drop"
+  ) |>
+  group_by(event) |>
+  mutate(
+    percentage = n / sum(n) * 100
+  )
+
+ggplot(
+  seasonal_summary,
+  aes(x = season, y = percentage)
+) +
+  geom_col() +
+  facet_wrap(~event) +
+  labs(
+    title = "Seasonal Distribution of Relationship Events",
+    x = "Season",
+    y = "Percentage of Reported Events"
+  ) +
+  theme_minimal()
+```
+```{r}
+#| label: decade-relationship
+
+cuffing_data <- cuffing_data |>
+  mutate(
+    relstart_decade = paste0(
+      floor(w1_q21b_year / 10) * 10,
+      "s"
+    )
+  )
+
+decade_season_summary <- cuffing_data |>
+  filter(
+    !is.na(relstart_decade),
+    !is.na(relstart_season)
+  ) |>
+  group_by(relstart_decade, relstart_season) |>
+  summarise(
+    n = n(),
+    .groups = "drop"
+  ) |>
+  group_by(relstart_decade) |>
+  mutate(
+    percentage = n / sum(n) * 100
+  )
+
+ggplot(
+  decade_season_summary,
+  aes(
+    x = relstart_decade,
+    y = percentage,
+    color = relstart_season,
+    group = relstart_season
+  )
+) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 2) +
+  labs(
+    title = "Seasonality of Relationship Formation by Decade",
+    x = "Decade Relationship Began",
+    y = "Percentage of Relationships",
+    color = "Season"
+  ) +
+  theme_minimal()
 ```
