@@ -21,10 +21,11 @@ p1 <- ggplot(cuffing_data) +
   geom_mosaic(aes(x = w1_age_at_relstart_cat, fill = relstart_season)) +
   theme_mosaic()
 
+# need to filter NAs out for this chart for w1_q21b_year values.
 p2 <- ggplot(cuffing_data) +
   geom_mosaic(aes(weight = w1_weight_combo, x = w1_age_at_relstart_cat, fill = relstart_season)) +
   theme_mosaic()
-
+p2
 library(patchwork)
 
 p1/p2

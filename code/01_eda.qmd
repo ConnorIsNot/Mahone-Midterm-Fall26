@@ -66,6 +66,7 @@ cuffing_data <- hcmst |>
   mutate(relationship_length = w1_year_fraction_breakup - w1_year_fraction_relstart) |> # creates a relationship length variable
   mutate(
     w1_age_at_relstart = w1_ppage - (2017 - w1_q21b_year)) |> 
+  # believe it or not this was clunkier when i first made it and I didn't know there was a way to assign the values all at once with predefined breaks, so ChatGPT debugged this for me and gave me a cleaner alternative.
   mutate(across(c(w1_ppage, w1_age_when_met, w1_age_at_relstart),
       ~ cut(
         .x,
@@ -177,100 +178,4 @@ ggplot(cuffing_data, aes(x = factor(w1_q21b_month), y = relationship_length)) +
 # Use Waffle Package to make a seperate chart for each age group, and have the values be the seasons by counts
 # of times that couples began their relationship then.
   # this would use the waffle plot + faceting
-```
-```{r}
-#| label: seasonal-patterns
-
-seasonal_data <- cuffing_data |>
-  select(
-    caseid_new,
-    ends_with("_season")
-  ) |>
-  pivot_longer(
-    cols = -caseid_new,
-    names_to = "event",
-    values_to = "season"
-  ) |>
-  mutate(
-    event = recode(
-      event,
-      w1_q21a_month_season = "Met partner",
-      w1_q21b_month_season = "Relationship began",
-      w1_q21e_month_season = "Relationship ended"
-    ),
-    season = factor(
-      season,
-      levels = c("Winter", "Spring", "Summer", "Fall")
-    )
-  )
-
-seasonal_summary <- seasonal_data |>
-  filter(!is.na(season)) |>
-  group_by(event, season) |>
-  summarise(
-    n = n(),
-    .groups = "drop"
-  ) |>
-  group_by(event) |>
-  mutate(
-    percentage = n / sum(n) * 100
-  )
-
-ggplot(
-  seasonal_summary,
-  aes(x = season, y = percentage)
-) +
-  geom_col() +
-  facet_wrap(~event) +
-  labs(
-    title = "Seasonal Distribution of Relationship Events",
-    x = "Season",
-    y = "Percentage of Reported Events"
-  ) +
-  theme_minimal()
-```
-```{r}
-#| label: decade-relationship
-
-cuffing_data <- cuffing_data |>
-  mutate(
-    relstart_decade = paste0(
-      floor(w1_q21b_year / 10) * 10,
-      "s"
-    )
-  )
-
-decade_season_summary <- cuffing_data |>
-  filter(
-    !is.na(relstart_decade),
-    !is.na(relstart_season)
-  ) |>
-  group_by(relstart_decade, relstart_season) |>
-  summarise(
-    n = n(),
-    .groups = "drop"
-  ) |>
-  group_by(relstart_decade) |>
-  mutate(
-    percentage = n / sum(n) * 100
-  )
-
-ggplot(
-  decade_season_summary,
-  aes(
-    x = relstart_decade,
-    y = percentage,
-    color = relstart_season,
-    group = relstart_season
-  )
-) +
-  geom_line(linewidth = 1) +
-  geom_point(size = 2) +
-  labs(
-    title = "Seasonality of Relationship Formation by Decade",
-    x = "Decade Relationship Began",
-    y = "Percentage of Relationships",
-    color = "Season"
-  ) +
-  theme_minimal()
 ```
