@@ -159,3 +159,7 @@ cuffing_success
 ```
 
 The data suggests that even though cuffing season is a real trend, and people who meet their partners during those months commit to a relationship quicker, there is no significant difference in the success rates of relationships by the season.
+
+Dataset:
+
+Rosenfeld, Michael J., Reuben J. Thomas, and Sonia Hausen. 2023. How Couples Meet and Stay Together 2017-2020-2022 combined dataset. \[Computer files\]. Stanford, CA: Stanford University Libraries. <https://data.stanford.edu/hcmst2017>
