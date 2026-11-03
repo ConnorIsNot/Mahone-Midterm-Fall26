@@ -4,12 +4,17 @@ author: Your name
 format: gfm
 ---
 
+Ideas for second chart:
+- Relationship lengths/success rate by season
+- How met partner by season? (Could be used to show which method sees "cuffing season" the most)
+
 ```{r}
 #| label: setup
 
 library(ggridges)
 library(ggdist)
 library(ggmosaic)
+library(waffle)
 
 ggplot(cuffing_data, aes(x = w1_q21b_month, y = w1_age_at_relstart_cat)) + 
   geom_density_ridges()
@@ -17,16 +22,24 @@ ggplot(cuffing_data, aes(x = w1_q21b_month, y = w1_age_at_relstart_cat)) +
   geom_dots()
 ggplot(cuffing_data, aes(x = w1_q21b_month, y = w1_age_at_relstart_cat)) + 
   geom_dots()
-p1 <- ggplot(cuffing_data) +
-  geom_mosaic(aes(x = w1_age_at_relstart_cat, fill = relstart_season)) +
-  theme_mosaic()
 
 # need to filter NAs out for this chart for w1_q21b_year values.
-p2 <- ggplot(cuffing_data) +
+
+cuffing_na_out <- cuffing_data |> 
+  filter(w1_q21b_year < 2018)
+
+p1 <- ggplot(cuffing_na_out) +
   geom_mosaic(aes(weight = w1_weight_combo, x = w1_age_at_relstart_cat, fill = relstart_season)) +
   theme_mosaic()
+p1
+
+p2 <- ggplot(cuffing_na_out) +
+  geom_mosaic(aes(weight = w1_weight_combo, x = w1_age_at_relstart_cat, fill = met_season)) +
+  theme_mosaic()
 p2
+
 library(patchwork)
 
-p1/p2
+p1 + p2
+
 ```

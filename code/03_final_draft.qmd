@@ -4,6 +4,8 @@ author: Your name
 format: gfm
 ---
 
+First chart will show the mosaic. It will show that younger couples are increasingly more likely to begin their relationships during the fall.
+
 ```{r}
 #| label: setup
 

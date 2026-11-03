@@ -1,6 +1,6 @@
 ---
 title: EDA
-author: Your name
+author: Connor Mahone
 format: gfm
 ---
 
@@ -29,11 +29,16 @@ I'm not sure where to put this note yet but I think it'll be interesting to incl
 ```{r}
 #| label: setup
 library(tidyverse)
+library(srvyr)
 
 load("../data/HCMST 2017 to 2022 small public version 2.2.rdata")
 
 hcmst <- `HCMST small public version 2.2`
-?labelled::to_labelled
+summary(hcmst)
+
+hcmst |>
+  select(starts_with("w1_q24")) |>
+  ls()
 
 core_variables <- c(
   "caseid_new", # respondant identifier
@@ -49,7 +54,8 @@ core_variables <- c(
   "w1_q21b_year", # year relationship began
   "w1_q21b_month", # month relationship began
   "w1_year_fraction_relstart", # decimal year representation of relationship start
-  "w1_time_from_met_to_rel" # met date to relationship start date in years
+  "w1_time_from_met_to_rel", # met date to relationship start date in years
+  "w1_how_met_online"
 )
 
 how_met_variables <- "w1_q24"
@@ -70,8 +76,10 @@ cuffing_data <- hcmst |>
   mutate(across(c(w1_ppage, w1_age_when_met, w1_age_at_relstart),
       ~ cut(
         .x,
-        breaks = c(-Inf, 18, 25, 35, 45, 65, Inf),
-        labels = c("< 18", "18-24", "25-34", "35-44", "45-64", "65+"),
+        # breaks = c(-Inf, 18, 25, 35, 45, 65, Inf), # Census Intervals
+        # labels = c("< 18", "18-24", "25-34", "35-44", "45-64", "65+"),
+        breaks = c(-Inf, 20, 30, 50, Inf),
+        labels = c("< 20", "20-29", "30-49", "50+"),
         right = FALSE
       ),
       .names = "{.col}_cat")) |> 
@@ -111,24 +119,89 @@ cuffing_data <- hcmst |>
   )
 )
 
-# in my EDA i was noticing that fall and winter seemed pretty low, which would disprove my hypothesis that was based on real research. I wondered if the sampling dates being in July-August would impact this becuase for 2017 we don't have any data after August. so I decided to filter out 2017 for now to see if that is the case.
-
-cuffing_data <- cuffing_data |>
-  filter(w1_q21b_year < 2017)
+summary(cuffing_data)
 
 summary(hcmst$w1_ppage)
 summary(hcmst$w1_year_fraction_relstart)
 summary(cuffing_data$w1_age_when_met)
 summary(cuffing_data$w1_age_at_relstart)
+hist(cuffing_data$w1_age_at_relstart, breaks = 30)
 summary(cuffing_data$w1_q21e_year)
 sum(!is.na(cuffing_data$w1_q21e_year))
 
+ggplot(cuffing_data, aes(x = w1_age_when_met, y = w1_age_at_relstart)) +
+  geom_point(alpha = 0.1)
+
+ggplot(cuffing_data, aes(x = met_season, y = w1_time_from_met_to_rel)) +
+  geom_boxplot()
+```
+
+
+```{r}
+#| label: survey-design
+
+
 cuffing_design <- cuffing_data |>
-  srvyr::as_survey_design(
+  as_survey_design(
     ids = 1,
     weights = w1_weight_combo
   )
+
+cuffing_grouped_summary <- cuffing_design |> 
+  group_by(relstart_season, w1_age_at_relstart_cat) |> 
+  summarize(count = survey_total()
+  )
+
+online_grouped_summary <- cuffing_design |> 
+  group_by(relstart_season, w1_q24_met_online) |> 
+  summarize(count = survey_total(),
+            prop = survey_mean(proportion = TRUE))
+
+ggplot(online_grouped_summary, aes(x = relstart_season, y = prop, fill = w1_q24_met_online)) +
+  geom_col()
 ```
+
+```{r}
+#| label: summarizing
+
+cuffing_success <- cuffing_data |> 
+  group_by(relstart_season) |> 
+  summarize(avg_relationship_length = mean(relationship_length, na.rm = TRUE),
+            matches = sum(!is.na(relationship_length)),
+            count = n()) |> 
+  mutate(success_rate = matches/count)
+
+ggplot(cuffing_success, aes(x = relstart_season, y = avg_relationship_length)) +
+  geom_col()
+ggplot(cuffing_success, aes(x = relstart_season, y = success_rate)) +
+  geom_col()
+```
+
+```{r}
+#| label: met-to-start
+
+commitment_time <- cuffing_design |>
+  filter(w1_q21a_year < 2017) |> 
+  group_by(w1_q21a_month) |> 
+  summarize(avg_time_to_commit = survey_mean(w1_time_from_met_to_rel, na.rm = TRUE, vartype = "ci"),
+            count = survey_total())
+
+ggplot(commitment_time, aes(x = w1_q21a_month, y = avg_time_to_commit)) +
+  geom_col()
+
+# ChatGPT was used for this chart to help me figure out how I could use srvyr data with this package. it let me know about ymin and ymax and using the vartype = "ci" from the survey_mean() arguments
+
+ggplot(commitment_time,
+       aes(
+         x = w1_q21a_month,
+         y = avg_time_to_commit,
+         ymin = avg_time_to_commit_low,
+         ymax = avg_time_to_commit_upp
+       )) +
+  ggdist::geom_lineribbon()
+```
+
+
 
 ```{r}
 #| label: exploratory-charts
@@ -157,11 +230,11 @@ all_age_relstart <- ggplot(cuffing_data, aes(x = relstart_season)) +
   ggtitle("Start Date by Season, All Ages")
 
 # only looking at the 18-24 category
-college_age_met <- ggplot(subset(cuffing_data, w1_age_at_relstart_cat == "< 18"), aes(x = met_season)) +
+college_age_met <- ggplot(subset(cuffing_data, w1_age_at_relstart_cat == "< 20"), aes(x = met_season)) +
   geom_bar()  +
   ggtitle("Meet Date by Season, 18-24")
 
-college_age_relstart <- ggplot(subset(cuffing_data, w1_age_at_relstart_cat == "< 18"), aes(x = relstart_season)) +
+college_age_relstart <- ggplot(subset(cuffing_data, w1_age_at_relstart_cat == "< 20"), aes(x = relstart_season)) +
   geom_bar() +
   ggtitle("Start Date by Season, 18-24")
 
@@ -169,13 +242,25 @@ college_age_relstart <- ggplot(subset(cuffing_data, w1_age_at_relstart_cat == "<
 
 (all_age_met + college_age_met) / (all_age_relstart + college_age_relstart)
 
-ggplot(cuffing_data, aes(x = factor(w1_q21b_month), y = relationship_length)) +
-  geom_boxplot()
+# trying out the waffle plot. seriously struggling with understanding how it works. may try to return to it...
 
-# plotting relationship 
-
-
-# Use Waffle Package to make a seperate chart for each age group, and have the values be the seasons by counts
-# of times that couples began their relationship then.
-  # this would use the waffle plot + faceting
+ggplot(cuffing_grouped_summary, aes(fill=w1_q21b_month, values=count)) +
+  geom_waffle(
+    color = "white", 
+    size = 1,
+    n_rows = 5,
+    make_proportional = TRUE
+  ) +
+  facet_wrap(~w1_age_at_relstart_cat, ncol=1) +
+  scale_x_discrete(
+    expand = c(0,0,0,0)
+  ) +
+  scale_y_discrete(
+    expand = c(0,0,0,0)
+  ) +
+  ggthemes::scale_fill_tableau(name=NULL) +
+  coord_equal() +
+  labs(
+    title = "Faceted Waffle Geoms"
+  )
 ```
