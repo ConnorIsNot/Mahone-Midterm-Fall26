@@ -30,6 +30,7 @@ I'm not sure where to put this note yet but I think it'll be interesting to incl
 #| label: setup
 library(tidyverse)
 library(srvyr)
+library(waffle)
 
 load("../data/HCMST 2017 to 2022 small public version 2.2.rdata")
 
@@ -244,7 +245,7 @@ college_age_relstart <- ggplot(subset(cuffing_data, w1_age_at_relstart_cat == "<
 
 # trying out the waffle plot. seriously struggling with understanding how it works. may try to return to it...
 
-ggplot(cuffing_grouped_summary, aes(fill=w1_q21b_month, values=count)) +
+ggplot(cuffing_grouped_summary, aes(fill=relstart_season, values=count)) +
   geom_waffle(
     color = "white", 
     size = 1,

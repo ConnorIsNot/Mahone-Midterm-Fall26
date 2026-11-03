@@ -1,13 +1,161 @@
 ---
-title: Final draft
-author: Your name
+title: Cuffing Season
+author: Connor Mahone
 format: gfm
 ---
 
-First chart will show the mosaic. It will show that younger couples are increasingly more likely to begin their relationships during the fall.
+Cuffing Season is the name ascribed to a phenomenon in which people seek out romantic partnership during the cold months of a year. Cuffing Season is well-documented and is even described in the Merriam Webster Dictionary as "a period of time where single people begin looking for short term partnerships to pass the colder months of the year." This begs the questions:
+
+-   Is cuffing season a real trend?
+
+-   Does it transcend age groups?
+
+-   Are couples that meet during cuffing season doomed to fail?
 
 ```{r}
 #| label: setup
+#| include: false
 
-# 
+library(showtext)
+library(tidyverse)
+library(srvyr)
+library(ggmosaic)
+library(ggdist)
+library(knitr)
+
+load("../data/filtered_cuffing_data.Rdata")
+cuffing_data <- cuffing_data
+
+font_add(family = "avenir_title", regular = "../data/Avenir Next Semi Condensed Demi.otf")
+font_add(family = "avenir_text", regular = "../data/Avenir Next Semi Condensed Regular.otf")
+
+showtext_auto()
+
+theme_set(
+  theme_minimal(
+    base_family = "avenir_text",
+    base_size = 18
+  ) +
+    theme(
+      text = element_text(color = "black"),
+      plot.title = element_text(
+        family = "avenir_title",
+        size = 24),
+      plot.subtitle = element_text(
+        size = 18),
+      axis.title = element_text(
+        size = 18),
+      axis.text = element_text(
+        size = 18),
+      legend.text = element_text(
+        size = 18),
+      legend.title = element_text(
+        size = 18),
+      plot.caption = element_text(
+        size = 16)
+    )
+)
+
+season_colors <- c(
+  "Fall"   = "#E45756",
+  "Summer" = "#F2CF5B",
+  "Spring" = "#54A24B",
+  "Winter" = "#4C78A8"
+)
 ```
+
+```{r}
+#| label: Seasonal-Relationship-Mosaic
+#| echo: false
+#| fig-alt: "A mosaic chart compares seasons people met partners by age group, Fall is most prominent under 20, while colors show Summer, Spring, and Winter shares. The chart is titled: Individuals under 20 are more likely to meet their partner in the Fall. The x-axis is season met and y-axis is the season. The figure caption states: Survey Data from 2017 of American Adults from Stanford's How Couples Meet and Stay Together 2017 (HCMST 2017). Ages of survey recipients are approximated from their age at collection date, and grouped by life stage. Season Met Partner is derived from the month each recipient met their partner, grouped by the meteorolical season."
+
+cuffing_na_out <- cuffing_data |> 
+  filter(w1_q21a_year < 2018) |> 
+  filter(met_season %in% c("Winter", "Spring", "Summer", "Fall"))
+
+ggplot(cuffing_na_out) +
+  geom_mosaic(aes(weight = w1_weight_combo, x = w1_age_when_met_cat, fill = met_season)) +
+  scale_fill_manual(values = season_colors) +
+  scale_x_productlist(name = "Age Group When Met Partner") +
+  scale_y_productlist(name = "Season Met Partner") +
+  labs(
+    title = "Individuals under 20 are more likely to meet their partner in the Fall",
+    fill = "Season Met",
+    caption = 
+    "Survey Data from 2017 of American Adults from Stanford's How Couples Meet and Stay Together 2017 (HCMST 2017).\nAges of survey recipients are approximated from their age at collection date, and grouped by life stage.\nSeason Met Partner is derived from the month each recipient met their partner, grouped by the meteorolical season."
+  ) +
+  theme(panel.grid.major = element_blank(),
+        legend.position = "none")
+ggsave("../plots/mahone-seasonal-relationship-mosaic.png")
+```
+
+So while it appears that cuffing season is a real trend that exists among young people, this is not newly established. Dr. Lehmiller for Vice [reported](https://www.vice.com/en/article/what-is-cuffing-season-winter-relationships-commitment/) that online dating peaks in the colder months. Cuffing season is often linked with an air of finiteness, the relationships that start during cuffing season are said to be short-term.
+
+```{r}
+#| label: Monthly-Commitment-Plot
+#| echo: false
+#| fig-alt: "A confidence interval line plot showing commitment time by the month people met their partners. The line varies closely from January to September before a steep drop through December. The chart is titled People who meet their partner between October and December commit to relationships faster. The x-axis is Month Met Partner and y-axis is time between meeting and relationship start in years. The figure caption states: Survey Data from 2017 of American Adults from Stanford's How Couples Meet and Stay Together 2017 (HCMST 2017).Met-to-Relationship Time is the time between a respondant meeting their partner and starting their relationship. Month Met Partner is the reported month each recipient met their partner."
+
+cuffing_design <- cuffing_data |>
+  as_survey_design(
+    ids = 1,
+    weights = w1_weight_combo
+  )
+
+commitment_time <- cuffing_design |>
+  filter(w1_q21a_year < 2017) |> 
+  group_by(w1_q21a_month) |> 
+  summarize(avg_time_to_commit = survey_mean(w1_time_from_met_to_rel, na.rm = TRUE, vartype = "ci"),
+            count = survey_total())
+
+ggplot(commitment_time,
+       aes(
+         x = w1_q21a_month,
+         y = avg_time_to_commit,
+         ymin = avg_time_to_commit_low,
+         ymax = avg_time_to_commit_upp
+       )) +
+  geom_lineribbon(alpha = 0.5) +
+  scale_x_continuous(
+    breaks = 1:12,
+    labels = month.abb
+  ) +
+  labs(
+    title = "People who meet their partner between October and December commit to relationships faster",
+    x = "Month Met Partner",
+    y = "Met-to-Relationship Time (Years)",
+    caption = 
+    "Survey Data from 2017 of American Adults from Stanford's How Couples Meet and Stay Together 2017 (HCMST 2017).\nMet-to-Relationship Time is the time between a respondant meeting their partner and starting their relationship\nMonth Met Partner is the reported month each recipient met their partner."
+  ) +
+  theme(panel.grid.minor = element_blank())
+ggsave("../plots/mahone-monthly-commitment-plot.png")
+```
+
+So if relationships that start during the cold months begin more hastily, does that mean those relationships are destined to end?
+
+```{r}
+#| label: Seasonal-Success-Relationships
+#| echo: false
+
+cuffing_success <- cuffing_design |> 
+  group_by(met_season) |> 
+  summarize(
+    avg_relationship_length = survey_mean(
+      relationship_length,
+      na.rm = TRUE),
+    matches = survey_total(!is.na(relationship_length)),
+    count = survey_total()) |> 
+  mutate(success_rate = matches/count) |> 
+  select(c("met_season","count","matches","success_rate")) |> 
+  filter(met_season %in% c("Winter","Spring","Summer","Fall")) |> 
+  kable(
+    digits = 4,
+    col.names = c("Season Met Partner", "Weighted # of Instances", "Weighted # of Break Ups", "Ratio of Break Ups to Instances"),
+    align = "rccc",
+    caption = "There is little variation in the success rate of a relationship by the month the couple met
+    \nSurvey Data from 2017 of American Adults from Stanford's How Couples Meet and Stay Together 2017 (HCMST 2017).\nSeason Met Partner is derived from the month each recipient met their partner, grouped by the meteorolical season.\nWeighted # of Instances is the number of partners that met in that season, controlled for oversampling.\nWeighted # of Break Ups is the number of those partners that were no longer together at the time of the survey, controlled for oversampling.\nRatio of Break Ups to Instances is the ratio of Weighted # of Break Ups to Weighted # of Instances"
+  )
+cuffing_success
+```
+
+The data suggests that even though cuffing season is a real trend, and people who meet their partners during those months commit to a relationship quicker, there is no significant difference in the success rates of relationships by the season.

@@ -1,20 +1,183 @@
 ---
 title: Sketches
-author: Your name
+author: Connor Mahone
 format: gfm
 ---
 
-Ideas for second chart:
-- Relationship lengths/success rate by season
-- How met partner by season? (Could be used to show which method sees "cuffing season" the most)
+Charts I Want
+- Chart 1: Seasonal frequencies of relationship starts by age group
+- Chart 2: Avg time to commit by month
+- Table 1: Success rate of relationships by season
+
+Paper Sketches:
+![Chart1Sketches](..\plots\PaperSketches\Chart1Sketches.png)
+![Chart2Sketches](..\plots\PaperSketches\Chart2Sketches.png)
 
 ```{r}
 #| label: setup
 
+library(tidyverse)
+library(srvyr)
 library(ggridges)
 library(ggdist)
 library(ggmosaic)
 library(waffle)
+
+load("../data/HCMST 2017 to 2022 small public version 2.2.rdata")
+
+hcmst <- `HCMST small public version 2.2`
+summary(hcmst)
+
+core_variables <- c(
+  "caseid_new", # respondant identifier
+  "w1_partnership_status", # relationship status in wave 1
+  "w1_weight_combo", # analytic weight 
+  "w1_ppage", # age in years at wave 1
+  "w1_ppagecat", # 7 age category at wave 1
+  "w1_ppagect4", # 4 age category
+  "w1_age_when_met", # calculated age when partners met
+  "w1_q21a_year", # year respondant met partner
+  "w1_q21a_month", # month respondant met partner
+  "w1_year_fraction_met", # decimal year representation of meeting date
+  "w1_q21b_year", # year relationship began
+  "w1_q21b_month", # month relationship began
+  "w1_year_fraction_relstart", # decimal year representation of relationship start
+  "w1_time_from_met_to_rel", # met date to relationship start date in years
+  "w1_how_met_online"
+)
+
+breakup_variables <- "w1_q21e"
+
+cuffing_data <- hcmst |> 
+  select(any_of(core_variables),
+         contains(breakup_variables)) |> 
+  mutate(across(c("w1_partnership_status", "w1_ppagecat","w1_ppagect4"),haven::as_factor)
+  ) |> 
+  mutate(w1_year_fraction_breakup = w1_q21e_year+((w1_q21e_month-0.5)/12)) |> # this creates a year fraction for breakup date using the same formula the survey uses for relstart date
+  mutate(relationship_length = w1_year_fraction_breakup - w1_year_fraction_relstart) |> # creates a relationship length variable
+  mutate(
+    w1_age_at_relstart = w1_ppage - (2017 - w1_q21b_year)) |> 
+  # believe it or not this was clunkier when i first made it and I didn't know there was a way to assign the values all at once with predefined breaks, so ChatGPT debugged this for me and gave me a cleaner alternative.
+  mutate(across(c(w1_ppage, w1_age_when_met, w1_age_at_relstart),
+      ~ cut(
+        .x,
+        # breaks = c(-Inf, 18, 25, 35, 45, 65, Inf), # Census Intervals
+        # labels = c("< 18", "18-24", "25-34", "35-44", "45-64", "65+"),
+        breaks = c(-Inf, 20, 30, 50, Inf),
+        labels = c("< 20", "20-29", "30-49", "50+"),
+        right = FALSE
+      ),
+      .names = "{.col}_cat")) |> 
+  mutate(
+  relstart_season = case_when(
+    w1_q21b_month %in% c(12, 1, 2) ~ "Winter",
+    w1_q21b_month %in% c(3, 4, 5)  ~ "Spring",
+    w1_q21b_month %in% c(6, 7, 8)  ~ "Summer",
+    w1_q21b_month %in% c(9, 10, 11) ~ "Fall",
+    TRUE ~ NA_character_
+  ),
+  relstart_season = factor(
+    relstart_season,
+    levels = c("Winter", "Spring", "Summer", "Fall")
+  ),
+  met_season = case_when(
+    w1_q21a_month %in% c(12, 1, 2) ~ "Winter",
+    w1_q21a_month %in% c(3, 4, 5)  ~ "Spring",
+    w1_q21a_month %in% c(6, 7, 8)  ~ "Summer",
+    w1_q21a_month %in% c(9, 10, 11) ~ "Fall",
+    TRUE ~ NA_character_
+  ),
+  met_season = factor(
+    met_season,
+    levels = c("Winter", "Spring", "Summer", "Fall")
+  ),
+  breakup_season = case_when(
+    w1_q21e_month %in% c(12, 1, 2) ~ "Winter",
+    w1_q21e_month %in% c(3, 4, 5)  ~ "Spring",
+    w1_q21e_month %in% c(6, 7, 8)  ~ "Summer",
+    w1_q21e_month %in% c(9, 10, 11) ~ "Fall",
+    TRUE ~ NA_character_
+  ),
+  breakup_season = factor(
+    breakup_season,
+    levels = c("Winter", "Spring", "Summer", "Fall")
+  )
+)
+
+save(cuffing_data, file = "../data/filtered_cuffing_data.Rdata")
+
+# need to filter NAs out for this chart for w1_q21b_year values.
+cuffing_na_out <- cuffing_data |> 
+  filter(w1_q21a_year < 2018) |> 
+  filter(met_season %in% c("Winter", "Spring", "Summer", "Fall"))
+
+cuffing_design <- cuffing_data |>
+  as_survey_design(
+    ids = 1,
+    weights = w1_weight_combo
+  )
+
+commitment_time <- cuffing_design |>
+  filter(w1_q21a_year < 2017) |> 
+  group_by(w1_q21a_month) |> 
+  summarize(avg_time_to_commit = survey_mean(w1_time_from_met_to_rel, na.rm = TRUE, vartype = "ci"),
+            count = survey_total())
+
+cuffing_success <- cuffing_design |> 
+  group_by(relstart_season) |> 
+  summarize(
+    avg_relationship_length = survey_mean(
+      relationship_length,
+      na.rm = TRUE),
+    matches = survey_total(!is.na(relationship_length)),
+    count = survey_total()) |> 
+  mutate(success_rate = matches/count)
+
+season_colors <- c(
+  "Fall"   = "#E45756",
+  "Summer" = "#F2CF5B",
+  "Spring" = "#54A24B",
+  "Winter" = "#4C78A8"
+)
+```
+
+```{r}
+#| label: font-setup
+
+library(showtext)
+font_add(family = "avenir_title", regular = "../data/Avenir Next Semi Condensed Demi.otf")
+font_add(family = "avenir_text", regular = "../data/Avenir Next Semi Condensed Regular.otf")
+
+showtext_auto()
+
+theme_set(
+  theme_minimal(
+    base_family = "avenir_text",
+    base_size = 13
+  ) +
+    theme(
+      text = element_text(color = "black"),
+      plot.title = element_text(
+        family = "avenir_title",
+        size = 15),
+      plot.subtitle = element_text(
+        size = 15),
+      axis.title = element_text(
+        size = 14),
+      axis.text = element_text(
+        size = 13),
+      legend.text = element_text(
+        size = 13),
+      legend.title = element_text(
+        size = 13),
+      plot.caption = element_text(
+        size = 12)
+    )
+)
+```
+
+```{r}
+#| label: plot-sketching
 
 ggplot(cuffing_data, aes(x = w1_q21b_month, y = w1_age_at_relstart_cat)) + 
   geom_density_ridges()
@@ -29,8 +192,7 @@ cuffing_na_out <- cuffing_data |>
   filter(w1_q21b_year < 2018)
 
 p1 <- ggplot(cuffing_na_out) +
-  geom_mosaic(aes(weight = w1_weight_combo, x = w1_age_at_relstart_cat, fill = relstart_season)) +
-  theme_mosaic()
+  geom_mosaic(aes(weight = w1_weight_combo, x = w1_age_at_relstart_cat, fill = relstart_season))
 p1
 
 p2 <- ggplot(cuffing_na_out) +
@@ -41,5 +203,62 @@ p2
 library(patchwork)
 
 p1 + p2
+
+commitment_time <- cuffing_design |>
+  filter(w1_q21a_year < 2017) |> 
+  group_by(w1_q21a_month) |> 
+  summarize(avg_time_to_commit = survey_mean(w1_time_from_met_to_rel, na.rm = TRUE, vartype = "ci"),
+            count = survey_total())
+
+ggplot(commitment_time, aes(x = w1_q21a_month, y = avg_time_to_commit)) +
+  geom_col()
+ggplot(commitment_time,
+       aes(
+         x = w1_q21a_month,
+         y = avg_time_to_commit,
+         ymin = avg_time_to_commit_low,
+         ymax = avg_time_to_commit_upp
+       )) +
+  ggdist::geom_lineribbon() +
+  scale_x_continuous(
+    breaks = 1:12,
+    labels = month.abb
+  )
+
+```
+
+```{r}
+#| label: cleaned-plots
+
+ggplot(cuffing_na_out) +
+  geom_mosaic(aes(weight = w1_weight_combo, x = w1_age_when_met_cat, fill = met_season)) +
+  scale_fill_manual(values = season_colors) +
+  scale_x_productlist(name = "Age Group When Met Partner") +
+  scale_y_productlist(name = "Season Met Partner") +
+  labs(
+    title = "Age Group vs Frequency of Relationships Met in Each Season",
+    fill = "Season Met"
+  ) +
+  theme(panel.grid.major = element_blank(),
+        legend.position = "none")
+
+ggplot(commitment_time,
+       aes(
+         x = w1_q21a_month,
+         y = avg_time_to_commit,
+         ymin = avg_time_to_commit_low,
+         ymax = avg_time_to_commit_upp
+       )) +
+  geom_lineribbon(alpha = 0.5) +
+  scale_x_continuous(
+    breaks = 1:12,
+    labels = month.abb
+  ) +
+  labs(
+    title = "Commitment by Partnership Meet Month",
+    x = "Month Met Partner",
+    y = "Time Between Meeting and Relationship Start (Years)"
+  ) +
+  theme(panel.grid.minor = element_blank())
 
 ```
