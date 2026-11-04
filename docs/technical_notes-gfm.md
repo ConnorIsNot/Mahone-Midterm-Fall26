@@ -126,3 +126,7 @@ patterns in romantic relationships.
   - This is possible using the survey data, but online dating has grown
     since then, and the survey asked about how partners met via an open
     ended question, making it more difficult to categorize.
+
+- Because the survey was conducted over summer, it may ignore the
+  (alleged) short-term nature of cuffing season, as some respondents may
+  not report it as their most recent “real” relationship.
